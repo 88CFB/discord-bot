@@ -1,65 +1,52 @@
-import os
-import requests
+import aiohttp
+import asyncio
+import random
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
+from urllib.parse import urljoin
 
-# 从 .env 文件加载环境变量
-load_dotenv(dotenv_path='secret.env')
+async def crawl_news(query):
+    try:
 
-# Shopee 登录 URL
-login_url = "https://shopee.tw/hsu6666"
+        # 构建URL
+        url = f"https://www.google.com/search?q={query}&sca_esv=ba58e664356714d5&biw=982&bih=750&tbm=nws&sxsrf=ADLYWILV081ZgTffE8cAWaDCd6sJQ84KWQ%3A1717213098595&ei=qpdaZuP-I8Ts1e8PmL6qmAY&ved=0ahUKEwjj-_qlvbmGAxVEdvUHHRifCmMQ4dUDCA0&uact=5&oq={query}&gs_lp=Egxnd3Mtd2l6LW5ld3MiBumBiuaIsjILEAAYgAQYsQMYgwEyCxAAGIAEGLEDGIMBMggQABiABBixAzIIEAAYgAQYsQMyCBAAGIAEGLEDMgoQABiABBhDGIoFMgoQABiABBhDGIoFMgoQABiABBhDGIoFMgUQABiABDIFEAAYgARIyhFQAFiqDHAAeACQAQCYAUSgAc0CqgEBNrgBA8gBAPgBAZgCBqAC8gLCAg4QABiABBixAxiDARiKBcICBBAAGB7CAggQABiiBBiJBcICCBAAGIAEGKIEmAMAkgcBNqAH8A8&sclient=gws-wiz-news"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
 
-# 从环境变量中获取用户名和密码
-username = os.getenv('SHOPEE_USERNAME')
-password = os.getenv('SHOPEE_PASSWORD')
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                html = await response.text()
 
-print(f"Username: {username}, Password: {password}")
-# Headers 和 Cookies（如果有的话）
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    "Content-Type": "application/json",
-    # 添加更多必要的 Headers
-}
+        # 解析HTML内容
+        soup = BeautifulSoup(html, "html.parser")
 
-# 登录表单数据
-login_data = {
-    "username": username,
-    "password": password,
-    "captcha": ""  # 如果有验证码，可能需要额外处理
-}
+        # 查找包含新闻条目的div元素
+        news_items = soup.select('div[class*="SoaBEf"]')
 
-# 开始一个 session
-session = requests.Session()
-
-# 发送 POST 请求进行登录
-response = session.post(login_url, headers=headers, json=login_data)
-
-# 检查响应状态码
-print(f"Response status code: {response.status_code}")
-
-# 打印响应内容以调试
-print("Response content:", response.text)
-
-# 尝试解析 JSON 响应
-try:
-    response_json = response.json()
-    print("JSON response:", response_json)
-except requests.exceptions.JSONDecodeError:
-    print("响应不是有效的 JSON 数据")
-
-# 检查响应状态
-if response.status_code == 200:
-    print("登录成功")
-    # 访问一些需要登录才能访问的页面来验证是否成功
-    profile_url = login_url
-    profile_response = session.get(profile_url, headers=headers)
-
-    if profile_response.status_code == 200:
-        print("成功访问受保护页面")
-        print(profile_response.json())  # 打印用户信息或其他内容
-    else:
-        print("访问受保护页面失败")
-else:
-    print("登录失败")
-    print(response.json())  # 打印错误信息
-
+        # 提取并返回新闻标题、链接和摘要的列表
+        news_list = []
+        for item in news_items:
+            delay = random.uniform(4, 7)
+            await asyncio.sleep(delay)
+            title = item.select_one('div[class="n0jPhd ynAwRc MBeuO nDgy9d"]')
+            outline = item.select_one('div[class="GI74Re nDgy9d"]')
+            link = item.find("a", class_="WlydOe")["href"]
+            '''
+            img = item.select_one('img[id*="dimg"]')
+            image_url = img['src'] if img else None
+            if image_url:
+                image_url = urljoin(url, image_url)  # 构建完整的图片 URL
+                '''
+            if title:
+                only_title = title.get_text()
+                only_outline = outline.get_text()
+                news_list.append({
+                    "title": only_title,
+                    "link": link,
+                    "outline": only_outline,
+                    #"img_url": image_url
+                })
+        return news_list
+    except Exception as e:
+        print(f"Error in crawl_news: {e}")
+        return []
